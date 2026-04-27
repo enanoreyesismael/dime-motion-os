@@ -15,6 +15,8 @@ export default function Login() {
 
     if (error) {
       alert(error.message);
+    } else {
+      window.location.href = "/dashboard"; // ✅ redirect after login
     }
   };
 
@@ -53,57 +55,106 @@ export default function Login() {
   };
 
   return (
-    <div style={{ maxWidth: 400, margin: "100px auto" }}>
-      <h2>Welcome</h2>
-
-      {/* FIRST NAME */}
-      <input
-        placeholder="First Name"
-        value={firstName}
-        onChange={(e) => setFirstName(e.target.value)}
-        style={{ width: "100%", marginBottom: 10 }}
-      />
-
-      {/* EMAIL */}
-      <input
-        placeholder="Email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        style={{ width: "100%", marginBottom: 10 }}
-      />
-
-      {/* PASSWORD */}
-      <input
-        type="password"
-        placeholder="Password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        style={{ width: "100%", marginBottom: 20 }}
-      />
-
-      {/* LOGIN */}
-      <button
-        onClick={handleLogin}
-        style={{ width: "100%", marginBottom: 10 }}
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "#f5f7fb"
+      }}
+    >
+      <div
+        style={{
+          width: 360,
+          background: "#fff",
+          padding: 30,
+          borderRadius: 12,
+          boxShadow: "0 10px 30px rgba(0,0,0,0.08)"
+        }}
       >
-        Login
-      </button>
+        <h2 style={{ marginBottom: 20 }}>Welcome</h2>
 
-      {/* SIGNUP */}
-      <button
-        onClick={handleSignup}
-        style={{ width: "100%", marginBottom: 10 }}
-      >
-        Create Account
-      </button>
+        {/* FIRST NAME */}
+        <input
+          placeholder="First Name (for signup)"
+          value={firstName}
+          onChange={(e) => setFirstName(e.target.value)}
+          style={inputStyle}
+        />
 
-      {/* RESET PASSWORD */}
-      <button
-        onClick={handleReset}
-        style={{ width: "100%" }}
-      >
-        Forgot Password
-      </button>
+        {/* EMAIL */}
+        <input
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          style={inputStyle}
+        />
+
+        {/* PASSWORD */}
+        <input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          style={inputStyle}
+        />
+
+        {/* LOGIN */}
+        <button style={primaryBtn} onClick={handleLogin}>
+          Login
+        </button>
+
+        {/* SIGNUP */}
+        <button style={secondaryBtn} onClick={handleSignup}>
+          Create Account
+        </button>
+
+        {/* RESET PASSWORD */}
+        <button style={linkBtn} onClick={handleReset}>
+          Forgot Password?
+        </button>
+      </div>
     </div>
   );
 }
+
+// 🎨 STYLES
+const inputStyle = {
+  width: "100%",
+  padding: 12,
+  marginBottom: 12,
+  borderRadius: 8,
+  border: "1px solid #ddd",
+  fontSize: 14
+};
+
+const primaryBtn = {
+  width: "100%",
+  padding: 12,
+  background: "#22c55e",
+  color: "#fff",
+  border: "none",
+  borderRadius: 8,
+  marginBottom: 10,
+  cursor: "pointer",
+  fontWeight: "bold"
+};
+
+const secondaryBtn = {
+  width: "100%",
+  padding: 12,
+  background: "#f1f5f9",
+  border: "none",
+  borderRadius: 8,
+  marginBottom: 10,
+  cursor: "pointer"
+};
+
+const linkBtn = {
+  background: "none",
+  border: "none",
+  color: "#3b82f6",
+  cursor: "pointer",
+  fontSize: 14
+};
