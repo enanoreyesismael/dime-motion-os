@@ -1,0 +1,108 @@
+body {
+  margin: 0;
+  font-family: Inter, sans-serif;
+  background: #f1f5f9;
+}
+
+/* LAYOUT */
+.app {
+  display: flex;
+  height: 100vh;
+}
+
+/* SIDEBAR */
+.sidebar {
+  width: 240px;
+  background: linear-gradient(180deg, #0f172a, #020617);
+  color: white;
+  padding: 20px;
+}
+
+/* MENU */
+.menu-item {
+  padding: 12px;
+  margin-top: 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: 0.2s;
+  color: #cbd5f5; /* ✅ restored original muted color */
+}
+
+.menu-item:hover {
+  background: rgba(255,255,255,0.05);
+  color: white;
+}
+
+.menu-item.active {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  box-shadow: 0 0 20px rgba(59,130,246,0.5);
+  color: white;
+}
+
+/* MAIN */
+.main {
+  flex: 1;
+  padding: 30px;
+  overflow-y: auto; /* ✅ prevents layout shifting */
+}
+
+/* 🔥 CARD SYSTEM (restored clean look) */
+.card {
+  background: white;
+  padding: 20px;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+/* 🔥 GRID CONSISTENCY */
+.grid {
+  display: grid;
+  gap: 20px;
+}
+
+/* 🔥 BUTTONS (uniform look) */
+.btn {
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  margin-top: 10px;
+  font-weight: 500;
+  transition: 0.2s;
+}
+
+.btn-blue {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+}
+
+.btn-blue:hover {
+  opacity: 0.9;
+}
+
+.btn-green {
+  background: #10b981;
+  color: white;
+}
+
+.btn-green:hover {
+  opacity: 0.9;
+}
+
+.btn-gray {
+  background: #e5e7eb;
+}
+
+.btn-gray:hover {
+  background: #d1d5db;
+}
+
+/* TEXT RESET */
+h1, h2, h3 {
+  margin: 0;
+}
+
+p {
+  margin: 4px 0;
+}
