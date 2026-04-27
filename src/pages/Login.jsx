@@ -16,7 +16,7 @@ export default function Login() {
     if (error) {
       alert(error.message);
     } else {
-      window.location.href = "/dashboard"; // ✅ redirect after login
+      window.location.href = "/dashboard";
     }
   };
 
@@ -73,7 +73,17 @@ export default function Login() {
           boxShadow: "0 10px 30px rgba(0,0,0,0.08)"
         }}
       >
-        <h2 style={{ marginBottom: 20 }}>Welcome</h2>
+        {/* 🔥 LOGO + TITLE */}
+        <div style={{ textAlign: "center", marginBottom: 20 }}>
+          <img
+            src="/logo.png"
+            alt="DimeMotion"
+            style={{ height: 50, marginBottom: 10 }}
+          />
+          <h2 style={{ margin: 0, color: "#0f172a" }}>
+            Welcome to DimeMotion
+          </h2>
+        </div>
 
         {/* FIRST NAME */}
         <input
