@@ -6,7 +6,7 @@ export default function Expenses() {
   const [showForm, setShowForm] = useState(false);
   const [list, setList] = useState([]);
 
-  const { symbol, convert } = useCurrency(); // ✅ added convert
+  const { symbol, fromUSD, toUSD } = useCurrency(); // ✅ FIXED
 
   const [form, setForm] = useState({
     category: "Food",
@@ -16,10 +16,14 @@ export default function Expenses() {
   });
 
   const fetchExpenses = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
     const { data } = await supabase
       .from("expenses")
       .select("*")
-      .order("date", { ascending: false });
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
 
     setList(data || []);
   };
@@ -31,10 +35,19 @@ export default function Expenses() {
   const handleAdd = async () => {
     if (!form.amount) return alert("Enter amount");
 
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // ✅ CONVERT TO USD BEFORE SAVE
+    const amountUSD = toUSD(Number(form.amount));
+
     await supabase.from("expenses").insert([
       {
-        ...form,
-        amount: Number(form.amount)
+        user_id: user.id,
+        category: form.category,
+        amount: amountUSD, // ✅ USD stored
+        notes: form.notes,
+        created_at: form.date
       }
     ]);
 
@@ -42,15 +55,30 @@ export default function Expenses() {
     setShowForm(false);
   };
 
-  const total = list.reduce((sum, i) => sum + i.amount, 0);
+  // CURRENT MONTH
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+
+  const monthlyList = list.filter(e => {
+    const d = new Date(e.created_at);
+    return d.getMonth() === currentMonth &&
+           d.getFullYear() === currentYear;
+  });
+
+  const total = monthlyList.reduce((sum, i) => sum + i.amount, 0);
+
+  const categoryOptions = [...new Set(list.map(e => e.category))];
 
   return (
     <div>
       <h1>Expenses</h1>
 
       <div className="card" style={{ marginTop: 20 }}>
-        <h2>{symbol}{convert(total).toLocaleString()}</h2>
-        <p>Total Expenses</p>
+        <h2>{symbol}{fromUSD(total).toLocaleString()}</h2>
+        <p>
+          {now.toLocaleString("default", { month: "long", year: "numeric" })} Expenses
+        </p>
       </div>
 
       <button
@@ -72,9 +100,9 @@ export default function Expenses() {
         </div>
       )}
 
-      {list.map((e) => (
+      {monthlyList.map((e) => (
         <div key={e.id} className="card">
-          {e.category} — {symbol}{convert(e.amount).toLocaleString()}
+          {e.category} — {symbol}{fromUSD(e.amount).toLocaleString()}
         </div>
       ))}
     </div>

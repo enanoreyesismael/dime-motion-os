@@ -1,463 +1,1063 @@
 import { useState, useEffect } from "react";
-import PageHeader from "../components/PageHeader";
-import {
-  Target,
-  CheckCircle,
-  Pause,
-  Plus,
-  Pencil,
-  Wallet
-} from "lucide-react";
 import { supabase } from "../lib/supabase";
+
 import { useCurrency } from "../context/CurrencyContext";
 
+import {
+  getMonthlyIncome
+} from "../utils/finance";
+
+import { computeEmergencyFund } from "../utils/emergencyFund";
+
+import EmergencyFundCard from "../components/EmergencyFundCard";
+import MoneyDisplay from "../components/MoneyDisplay";
 
 export default function Goals() {
-  const [filter, setFilter] = useState("All");
-  const [showForm, setShowForm] = useState(false);
-  const [goals, setGoals] = useState([]);
-  const [incomes, setIncomes] = useState([]);
+  const [goals, setGoals] =
+    useState([]);
 
-  const { symbol, convert } = useCurrency();
+  const [expenses, setExpenses] =
+    useState([]);
 
-  const fetchGoals = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+  const [wallet, setWallet] =
+    useState(null);
+
+  const [incomes, setIncomes] =
+    useState([]);
+
+  const { symbol, fromUSD } =
+    useCurrency();
+
+  const [showGoalModal, setShowGoalModal] =
+  useState(false);
+
+const [goalForm, setGoalForm] =
+  useState({
+    name: "",
+
+    target: "",
+
+    saved: "",
+
+    target_date: "",
+
+    category: "General",
+
+    priority: "Medium",
+
+    source_type: "auto",
+
+    auto_source:
+      "Goals Builder",
+
+    auto_percent: 15,
+
+    notes: "",
+
+    status: "Active"
+  });
+
+  const fetchData = async () => {
+    const {
+      data: { user }
+    } = await supabase.auth.getUser();
+
     if (!user) return;
 
-    const { data } = await supabase
-      .from("goals")
+    // GOALS
+    const { data: goalData } =
+      await supabase
+        .from("goals")
+        .select("*")
+        .eq("user_id", user.id);
+
+    // EXPENSES
+    const {
+      data: expenseData
+    } = await supabase
+      .from("expenses")
+      .select("*")
+      .eq("user_id", user.id);
+
+    // WALLET
+    const {
+      data: walletData
+    } = await supabase
+      .from("wallets")
       .select("*")
       .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
+      .maybeSingle();
 
-    const { data: incomeData } = await supabase
+    // INCOMES
+    const {
+      data: incomeData
+    } = await supabase
       .from("incomes")
       .select("*")
       .eq("user_id", user.id);
 
-    setGoals(data || []);
+    setGoals(goalData || []);
+    setExpenses(
+      expenseData || []
+    );
+    setWallet(walletData);
     setIncomes(incomeData || []);
   };
 
   useEffect(() => {
-    fetchGoals();
+    fetchData();
   }, []);
 
-  const getEmergencyFund = () => {
-    if (!incomes.length) return null;
+  // MONTHLY INCOME
+  const monthlyIncome =
+    getMonthlyIncome(incomes);
 
-    const monthly = {};
-    incomes.forEach(i => {
-      const month = new Date(i.date).toISOString().slice(0, 7);
-      monthly[month] = (monthly[month] || 0) + i.amount;
+  // EMERGENCY FUND
+  const emergencyData =
+    computeEmergencyFund({
+      goals,
+      expenses,
+      wallet,
+      monthlyIncome
     });
 
-    const highest = Math.max(...Object.values(monthly), 0);
-    if (!highest) return null;
+    // ADD GOAL
+  const handleCreateGoal =
+  async () => {
 
-    const existing = goals.find(g => g.name === "Emergency Fund");
-    const saved = existing?.saved || 0;
+    if (!goalForm.name) {
+      alert("Enter goal name");
+      return;
+    }
 
-    const multiplier = Math.max(6, Math.ceil(saved / highest));
-    const target = highest * multiplier;
+    if (
+      !goalForm.target ||
+      Number(goalForm.target) <= 0
+    ) {
+      alert(
+        "Enter valid target"
+      );
 
-    const monthsCovered = saved / highest;
-    const daysCovered = Math.floor(monthsCovered * 30);
+      return;
+    }
 
-    const percent = Math.min(100, Math.round((saved / target) * 100));
+    const {
+      data: { user }
+    } =
+      await supabase.auth.getUser();
 
-    return {
-      saved,
-      target,
-      percent,
-      monthsCovered,
-      daysCovered,
-      targetMonths: multiplier
-    };
+    if (!user) return;
+
+    const { error } =
+      await supabase
+        .from("goals")
+        .insert([
+          {
+            user_id: user.id,
+
+            name:
+              goalForm.name,
+
+            target: Number(
+              goalForm.target
+            ),
+
+            saved: Number(
+              goalForm.saved || 0
+            ),
+
+            target_date:
+              goalForm.target_date,
+
+            category:
+              goalForm.category,
+
+            priority:
+              goalForm.priority,
+
+            source_type:
+              goalForm.source_type,
+
+            auto_source:
+              goalForm.auto_source,
+
+            auto_percent:
+              Number(
+                goalForm.auto_percent
+              ),
+
+            notes:
+              goalForm.notes,
+
+            status: "Active"
+          }
+        ]);
+
+    if (error) {
+      console.error(error);
+
+      alert(error.message);
+
+      return;
+    }
+
+    setShowGoalModal(false);
+
+    fetchData();
   };
+      
 
-  const emergency = getEmergencyFund();
+  // ADD FUNDS
+  const handleAddFunds =
+    async (goal) => {
+      const input = prompt(
+        `Add funds to ${goal.name}`
+      );
 
-  const enhancedGoals = goals
-    .filter(g => g.name !== "Emergency Fund")
-    .map(g => {
-      const percent = Math.min(100, Math.round((g.saved / g.target) * 100));
-      let status = "Active";
-      if (percent >= 100) status = "Completed";
-      return { ...g, percent, status };
-    });
+      if (!input) return;
 
-  const filteredGoals =
-    filter === "All"
-      ? enhancedGoals
-      : enhancedGoals.filter(g => g.status === filter);
+      const amount = Number(
+        input
+      );
 
-  const active = enhancedGoals.filter(g => g.status === "Active").length;
-  const completed = enhancedGoals.filter(g => g.status === "Completed").length;
-  const paused = enhancedGoals.filter(g => g.status === "Paused").length;
+      if (
+        isNaN(amount) ||
+        amount <= 0
+      ) {
+        alert(
+          "Invalid amount"
+        );
+
+        return;
+      }
+
+      const newSaved =
+        (goal.saved || 0) +
+        amount;
+
+      const { error } =
+        await supabase
+          .from("goals")
+          .update({
+            saved:
+              newSaved
+          })
+          .eq("id", goal.id);
+
+      if (error) {
+        alert(
+          "Failed to update goal"
+        );
+
+        return;
+      }
+
+      fetchData();
+    };
+
+  // TOTALS
+  const totalSaved =
+    goals.reduce(
+      (sum, goal) =>
+        sum +
+        (goal.saved || 0),
+      0
+    );
+
+  const totalTarget =
+    goals.reduce(
+      (sum, goal) =>
+        sum +
+        (goal.target || 0),
+      0
+    );
+
+  const overallPercent =
+    totalTarget > 0
+      ? Math.min(
+          (totalSaved /
+            totalTarget) *
+            100,
+          100
+        )
+      : 0;
 
   return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          
+    <div style={page}>
+      {/* HEADER */}
+      <div style={header}>
+        <h1
+          style={{
+            color: "#062B68",
+            marginBottom: 4
+          }}
+        >
+          Goals
+        </h1>
 
-<PageHeader
-  
-  title="🎯 Goals"
-  subtitle="Track your financial milestones"
-  
-/>
+        <p style={subText}>
+          Plan your future and
+          build toward it
+        </p>
+      </div>
+
+      {/* HERO */}
+      <div style={heroCard}>
+        <div>
+          <p style={heroLabel}>
+            Combined Goals Progress
+          </p>
+
+          <MoneyDisplay
+            amount={totalSaved}
+            large
+            color="white"
+            secondaryColor="rgba(255,255,255,0.75)"
+          />
+
+          <p style={heroSub}>
+            of
+          </p>
+
+          <MoneyDisplay
+            amount={totalTarget}
+            color="white"
+            secondaryColor="rgba(255,255,255,0.75)"
+          />
+
+          <div
+            style={{
+              marginTop: 16
+            }}
+          >
+            <div
+              style={
+                progressBar
+              }
+            >
+              <div
+                style={{
+                  ...progressFill,
+                  width: `${overallPercent}%`,
+                  background:
+                    "linear-gradient(90deg,#2E9E44,#66CC66)"
+                }}
+              />
+            </div>
+
+            <p
+              style={{
+                marginTop: 8
+              }}
+            >
+              {Math.round(
+                overallPercent
+              )}
+              % completed
+            </p>
+          </div>
+        </div>
+
+        <div style={heroCircle}>
+          🎯
+        </div>
+      </div>
+
+      {/* ADD GOAL */}
+      <button
+  style={blueButton}
+  onClick={() =>
+    setShowGoalModal(true)
+  }
+>
+  + Add New Goal
+</button>
+
+{showGoalModal && (
+  <div style={modalOverlay}>
+    <div style={modalCard}>
+
+      <div style={rowBetween}>
+        <div>
+          <h2
+            style={{
+              margin: 0,
+              color: "#062B68"
+            }}
+          >
+            🎯 Create Goal
+          </h2>
+
+          <p
+            style={{
+              color: "#64748B",
+              marginTop: 6
+            }}
+          >
+            Plan your future with intentional saving
+          </p>
         </div>
 
         <button
-          className="btn btn-blue"
-          style={{ width: "auto", display: "flex", alignItems: "center", gap: 6 }}
-          onClick={() => setShowForm(true)}
+          style={closeBtn}
+          onClick={() =>
+            setShowGoalModal(false)
+          }
         >
-          <Plus size={16} />
-          New Goal
+          ✕
         </button>
       </div>
 
-      {/* SUMMARY */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, marginTop: 20 }}>
-        <SummaryCard icon={<Target size={18} />} value={active} label="Active" />
-        <SummaryCard icon={<CheckCircle size={18} />} value={completed} label="Completed" />
-        <SummaryCard icon={<Pause size={18} />} value={paused} label="Paused" />
+      <div style={goalFormGrid}>
+
+        <div>
+          <label>Goal Name</label>
+
+          <input
+            style={input}
+            value={goalForm.name}
+            onChange={(e) =>
+              setGoalForm({
+                ...goalForm,
+                name: e.target.value
+              })
+            }
+          />
+        </div>
+
+        <div>
+          <label>Category</label>
+
+          <select
+            style={input}
+            value={goalForm.category}
+            onChange={(e) =>
+              setGoalForm({
+                ...goalForm,
+                category: e.target.value
+              })
+            }
+          >
+            <option>General</option>
+            <option>Travel</option>
+            <option>Emergency</option>
+            <option>Business</option>
+            <option>Car</option>
+            <option>House</option>
+          </select>
+        </div>
+
+        <div>
+          <label>Target Amount</label>
+
+          <input
+            type="number"
+            style={input}
+            value={goalForm.target}
+            onChange={(e) =>
+              setGoalForm({
+                ...goalForm,
+                target: e.target.value
+              })
+            }
+          />
+        </div>
+
+        <div>
+          <label>Current Saved</label>
+
+          <input
+            type="number"
+            style={input}
+            value={goalForm.saved}
+            onChange={(e) =>
+              setGoalForm({
+                ...goalForm,
+                saved: e.target.value
+              })
+            }
+          />
+        </div>
+
+        <div>
+          <label>Target Date</label>
+
+          <input
+            type="date"
+            style={input}
+            value={goalForm.target_date}
+            onChange={(e) =>
+              setGoalForm({
+                ...goalForm,
+                target_date:
+                  e.target.value
+              })
+            }
+          />
+        </div>
       </div>
 
-      {/* 🔥 EMERGENCY FUND */}
-{emergency && (
-  <div className="card" style={{ marginTop: 20, padding: 16 }}>
+      <div style={{ marginTop: 28 }}>
+        <h3 style={{ color: "#062B68" }}>
+          Funding Strategy
+        </h3>
 
-    {/* HEADER */}
-    <div style={{
-  display: "grid",
-  gridTemplateColumns: "1fr auto 1fr",
-  alignItems: "center"
-}}>
+        <div style={strategyGrid}>
 
-  {/* LEFT */}
-  <h2 style={{ margin: 0 }}>
-    🛡️ Secured You
-  </h2>
+          {[
+            {
+              value: "manual",
+              title: "Manual Saving"
+            },
 
-  {/* CENTER */}
-  <div style={{
-    textAlign: "center",
-    fontSize: 20,
-    color: "#64748b",
-    fontWeight: 500
-  }}>
-    Emergency Fund Goal
-  </div>
+            {
+              value: "auto",
+              title:
+                "Automatic Allocation"
+            },
 
-  {/* RIGHT */}
-  <div style={{ display: "flex", justifyContent: "flex-end" }}>
-    <button
-      className="btn btn-green"
-      style={{ width: "auto", display: "flex", gap: 6, alignItems: "center" }}
-    >
-      <Wallet size={14} /> Add Funds
-    </button>
-  </div>
+            {
+              value: "hybrid",
+              title: "Hybrid"
+            }
+          ].map((item) => (
+            <div
+              key={item.value}
+              style={{
+                ...strategyCard,
 
-</div>
+                border:
+                  goalForm.source_type ===
+                  item.value
+                    ? "2px solid #2563EB"
+                    : "1px solid #CBD5E1"
+              }}
+              onClick={() =>
+                setGoalForm({
+                  ...goalForm,
+                  source_type:
+                    item.value
+                })
+              }
+            >
+              <div
+                style={{
+                  ...radioCircle,
 
-    {/* SAVED */}
-    <p style={{ marginTop: 6 }}>
-      {symbol}{convert(emergency.saved).toLocaleString()} saved of {symbol}{convert(Math.round(emergency.target)).toLocaleString()}
-    </p>
+                  background:
+                    goalForm.source_type ===
+                    item.value
+                      ? "#2563EB"
+                      : "white"
+                }}
+              />
 
-    {/* PROGRESS BAR */}
-    <div style={{ marginTop: 10 }}>
-      <div style={{ height: 10, background: "#e5e7eb", borderRadius: 10 }}>
-        <div
-          style={{
-            width: `${emergency.percent}%`,
-            height: "100%",
-            background: emergency.percent === 0 ? "#cbd5f5" : "#3b82f6",
-            borderRadius: 10
-          }}
-        />
+              <div>
+                <div
+                  style={{
+                    fontWeight: 700,
+                    color: "#062B68"
+                  }}
+                >
+                  {item.title}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={modalActions}>
+        <button
+          style={cancelBtn}
+          onClick={() =>
+            setShowGoalModal(false)
+          }
+        >
+          Cancel
+        </button>
+
+        <button
+          style={createBtn}
+          onClick={handleCreateGoal}
+        >
+          Create Goal
+        </button>
       </div>
     </div>
-
-    {/* PERCENT */}
-    <div style={{
-  display: "grid",
-  gridTemplateColumns: "1fr auto 1fr",
-  alignItems: "center",
-  marginTop: 8
-}}>
-
-  {/* LEFT (empty spacer) */}
-  <div />
-
-  {/* CENTER → STATUS */}
-  <div style={{ textAlign: "center" }}>
-    <span style={{
-      fontSize: 12,
-      padding: "4px 8px",
-      borderRadius: 6,
-      background:
-        emergency.percent >= 100 ? "#dcfce7" :
-        emergency.percent >= 60 ? "#dbeafe" :
-        "#fef3c7",
-      color:
-        emergency.percent >= 100 ? "#166534" :
-        emergency.percent >= 60 ? "#1d4ed8" :
-        "#92400e"
-    }}>
-      {emergency.percent >= 100
-        ? "Fully Secured"
-        : emergency.percent >= 60
-        ? "On Track"
-        : "Building Protection"}
-    </span>
-  </div>
-
-  {/* RIGHT → PERCENT */}
-  <div style={{
-    display: "flex",
-    justifyContent: "flex-end",
-    fontSize: 12
-  }}>
-    {emergency.percent}% complete
-  </div>
-
-</div>
-
-    {/* COVERAGE */}
-    <div style={{ marginTop: 12 }}>
-      <h3 style={{ margin: 0 }}>
-  You are currently{" "}
-  <span style={{
-    color: "#3b82f6",
-    fontWeight: 600
-  }}>
-    {emergency.monthsCovered.toFixed(1)} months : {emergency.daysCovered} days
-  </span>{" "}
-  covered
-</h3>
-
-      <p style={{ fontSize: 12, color: "#64748b" }}>
-        Goal: Reach {emergency.targetMonths} months of protection.
-      </p>
-    </div>
-
-    {/* NEXT STEP */}
-    <p style={{ fontSize: 12, color: "#64748b", marginTop: 6 }}>
-      Adding {symbol}{convert(Math.ceil((emergency.target - emergency.saved) * 0.1)).toLocaleString()} will extremely improve coverage
-    </p>
-
   </div>
 )}
 
-      {showForm && (
-        <AddGoalModal
-          onClose={() => setShowForm(false)}
-          onSaved={() => {
-            fetchGoals();
-            setShowForm(false);
-          }}
-        />
-      )}
 
-      {/* FILTERS */}
-      <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-        {["All", "Active", "Completed"].map((f) => (
-          <button
-            key={f}
-            className="btn"
-            style={{
-              width: "auto",
-              padding: "8px 14px",
-              background: filter === f ? "#3b82f6" : "#e5e7eb",
-              color: filter === f ? "white" : "black"
-            }}
-            onClick={() => setFilter(f)}
-          >
-            {f}
-          </button>
-        ))}
-      </div>
+      {/* EMERGENCY FUND */}
+      <EmergencyFundCard
+        data={emergencyData}
+        symbol={symbol}
+        fromUSD={fromUSD}
+        onAddFunds={() =>
+          handleAddFunds({
+            id:
+              emergencyData.id,
+            name:
+              "Emergency Fund",
+            saved:
+              emergencyData.saved
+          })
+        }
+        card={securedCard}
+        progressBg={
+          progressBar
+        }
+        progressFill={
+          progressFill
+        }
+      />
 
       {/* GOALS GRID */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 20, marginTop: 20 }}>
-        {filteredGoals.map((goal) => {
-          const percent = goal.percent;
+      <div style={goalGrid}>
+        {goals.map((goal) => {
+          const percent =
+            goal.target > 0
+              ? Math.min(
+                  (goal.saved /
+                    goal.target) *
+                    100,
+                  100
+                )
+              : 0;
 
-          const color =
-            percent >= 100
-              ? "#10b981"
-              : percent >= 60
-              ? "#3b82f6"
-              : "#f59e0b";
+          let gradient =
+            "linear-gradient(135deg,#062B68,#0B5ED7)";
 
-          const statusLabel =
-            percent >= 100
-              ? "Completed"
-              : percent >= 60
-              ? "On Track"
-              : "Getting Started";
+          if (percent >= 70)
+            gradient =
+              "linear-gradient(135deg,#2E9E44,#1F7A34)";
 
-          const nextStep = percent === 0
-            ? Math.ceil(goal.target * 0.02)
-            : Math.ceil((goal.target - goal.saved) * 0.1);
+          if (percent >= 100)
+            gradient =
+              "linear-gradient(135deg,#F4C400,#D9A800)";
 
           return (
-            <div key={goal.id} className="card" style={{ padding: 16 }}>
+            <div
+              key={goal.id}
+              style={goalCard}
+            >
+              {/* TOP */}
+              <div
+                style={
+                  rowBetween
+                }
+              >
+                <div>
+                  <h3
+                    style={{
+                      marginBottom: 6,
+                      color:
+                        "#062B68"
+                    }}
+                  >
+                    {
+                      goal.name
+                    }
+                  </h3>
 
-              {/* HEADER */}
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <h3 style={{ margin: 0 }}>{goal.name}</h3>
-                <strong>{percent}%</strong>
+                  <p
+                    style={{
+                      color:
+                        "#64748B",
+                      fontSize: 13
+                    }}
+                  >
+                    Goal Target
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    width: 54,
+                    height: 54,
+                    borderRadius:
+                      "50%",
+                    background:
+                      gradient,
+                    display:
+                      "flex",
+                    alignItems:
+                      "center",
+                    justifyContent:
+                      "center",
+                    color:
+                      "white",
+                    fontSize: 24,
+                    fontWeight: 700
+                  }}
+                >
+                  {Math.round(
+                    percent
+                  )}
+                  %
+                </div>
               </div>
 
-              {/* TARGET */}
-              <p style={{ fontSize: 12, color: "#64748b" }}>
-                Target: {symbol}{convert(goal.target).toLocaleString()}
-              </p>
+              {/* VALUE */}
+              <div
+                style={{
+                  marginTop: 18
+                }}
+              >
+                <MoneyDisplay
+                  amount={
+                    goal.saved
+                  }
+                  color="#062B68"
+                />
 
-              {/* SAVED */}
-              <p style={{ marginTop: 6 }}>
-                {symbol}{convert(goal.saved).toLocaleString()} saved
-              </p>
+                <div
+                  style={{
+                    marginTop: 6,
+                    color:
+                      "#64748B"
+                  }}
+                >
+                  Target:
+                </div>
 
-              {/* PROGRESS */}
-              <div style={{ marginTop: 10 }}>
-                <div style={{ height: 8, background: "#e5e7eb", borderRadius: 10 }}>
+                <MoneyDisplay
+                  amount={
+                    goal.target
+                  }
+                  color="#64748B"
+                />
+              </div>
+
+              {/* BAR */}
+              <div
+                style={{
+                  marginTop: 16
+                }}
+              >
+                <div
+                  style={
+                    progressBar
+                  }
+                >
                   <div
                     style={{
+                      ...progressFill,
                       width: `${percent}%`,
-                      height: "100%",
-                      background: percent === 0 ? "#cbd5f5" : color,
-                      borderRadius: 10
+                      background:
+                        gradient
                     }}
                   />
                 </div>
               </div>
 
-              {/* STATUS */}
-              <div style={{ marginTop: 8 }}>
-                <span style={{
-                  fontSize: 12,
-                  padding: "4px 8px",
-                  borderRadius: 6,
-                  background:
-                    percent >= 100 ? "#dcfce7" :
-                    percent >= 60 ? "#dbeafe" :
-                    "#fef3c7",
-                  color:
-                    percent >= 100 ? "#166534" :
-                    percent >= 60 ? "#1d4ed8" :
-                    "#92400e"
-                }}>
-                  {statusLabel}
+              {/* FOOTER */}
+              <div
+                style={{
+                  marginTop: 18,
+                  display:
+                    "flex",
+                  justifyContent:
+                    "space-between",
+                  alignItems:
+                    "center"
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 13,
+                    color:
+                      "#64748B"
+                  }}
+                >
+                  {Math.round(
+                    percent
+                  )}
+                  % completed
                 </span>
-              </div>
 
-              {/* NEXT STEP */}
-              <p style={{ fontSize: 12, color: "#64748b", marginTop: 6 }}>
-                Add {symbol}{convert(nextStep).toLocaleString()} to move forward
-              </p>
-
-              {/* ACTION */}
-              <div style={{ marginTop: 12 }}>
-                <button className="btn btn-green" style={{ width: "100%", display: "flex", justifyContent: "center", gap: 6 }}>
-                  <Wallet size={14} />
-                  Add Funds
+                <button
+                  style={
+                    addFundsBtn
+                  }
+                  onClick={() =>
+                    handleAddFunds(
+                      goal
+                    )
+                  }
+                >
+                  + Add Funds
                 </button>
               </div>
-
             </div>
           );
         })}
       </div>
+
+      {/* EMPTY */}
+      {goals.length === 0 && (
+        <div style={emptyCard}>
+          <h3
+            style={{
+              color: "#062B68"
+            }}
+          >
+            No goals yet
+          </h3>
+
+          <p
+            style={{
+              color: "#64748B"
+            }}
+          >
+            Start planning your
+            future by creating your
+            first goal.
+          </p>
+        </div>
+      )}
     </div>
   );
+
 }
+// STYLES
 
-/* SAME COMPONENTS */
+const page = {
+  background: "#EEF4FB",
+  minHeight: "100vh",
+  padding: 20
+};
 
-function SummaryCard({ icon, value, label }) {
-  const colorMap = {
-    Active: "#3b82f6",
-    Completed: "#10b981",
-    Paused: "#f59e0b"
-  };
+const header = {
+  marginBottom: 20
+};
 
-  const color = colorMap[label] || "#64748b";
+const subText = {
+  color: "#64748B",
+  fontSize: 14
+};
 
-  return (
-    <div className="card" style={{ textAlign: "center" }}>
-      <div style={{
-        marginBottom: 8,
-        background: `${color}15`,
-        color,
-        display: "inline-flex",
-        padding: 8,
-        borderRadius: 10
-      }}>
-        {icon}
-      </div>
+const heroCard = {
+  background:
+    "linear-gradient(135deg,#062B68,#0B5ED7)",
+  color: "white",
+  padding: 26,
+  borderRadius: 24,
+  marginBottom: 20,
+  boxShadow:
+    "0 14px 35px rgba(11,94,215,0.30)",
+  display: "flex",
+  justifyContent:
+    "space-between",
+  alignItems: "center"
+};
 
-      <h2>{value}</h2>
-      <p>{label}</p>
-    </div>
-  );
-}
+const heroLabel = {
+  opacity: 0.9,
+  marginBottom: 8
+};
 
-function AddGoalModal({ onClose, onSaved }) {
-  const [name, setName] = useState("");
-  const [target, setTarget] = useState("");
+const heroSub = {
+  opacity: 0.85,
+  marginTop: 8,
+  marginBottom: 6
+};
 
-  const handleSave = async () => {
-    if (!name || !target) return alert("Fill all fields");
+const heroCircle = {
+  width: 90,
+  height: 90,
+  borderRadius: "50%",
+  background:
+    "rgba(255,255,255,0.15)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: 42
+};
 
-    const { data: { user } } = await supabase.auth.getUser();
+const blueButton = {
+  width: "100%",
+  background:
+    "linear-gradient(135deg,#062B68,#0B5ED7)",
+  color: "white",
+  border: "none",
+  borderRadius: 16,
+  padding: 16,
+  fontWeight: 700,
+  cursor: "pointer",
+  marginBottom: 20,
+  boxShadow:
+    "0 10px 25px rgba(11,94,215,0.20)"
+};
 
-    await supabase.from("goals").insert([
-      {
-        name,
-        target: Number(target),
-        saved: 0,
-        user_id: user.id
-      }
-    ]);
+const securedCard = {
+  background:
+    "linear-gradient(135deg,#ECFDF5,#EFF6FF)",
+  padding: 22,
+  borderRadius: 22,
+  marginBottom: 20,
+  border: "1px solid #D1FAE5",
+  boxShadow:
+    "0 8px 25px rgba(0,0,0,0.05)"
+};
 
-    onSaved();
-  };
+const goalGrid = {
+  display: "grid",
+  gridTemplateColumns:
+    "repeat(auto-fit, minmax(300px,1fr))",
+  gap: 18
+};
 
-  return (
-    <div className="card" style={{ marginTop: 20 }}>
-      <h3>Add Goal</h3>
+const goalCard = {
+  background: "#FFFFFF",
+  padding: 22,
+  borderRadius: 24,
+  boxShadow:
+    "0 10px 28px rgba(0,0,0,0.06)"
+};
 
-      <input
-        placeholder="Goal name"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        style={{ marginTop: 10 }}
-      />
+const rowBetween = {
+  display: "flex",
+  justifyContent:
+    "space-between",
+  alignItems: "center"
+};
 
-      <input
-        type="number"
-        placeholder="Target amount"
-        value={target}
-        onChange={(e) => setTarget(e.target.value)}
-        style={{ marginTop: 10 }}
-      />
+const progressBar = {
+  height: 10,
+  background: "#E5E7EB",
+  borderRadius: 999,
+  overflow: "hidden"
+};
 
-      <div style={{ display: "flex", gap: 10, marginTop: 15 }}>
-        <button className="btn btn-blue" onClick={handleSave}>
-          Save
-        </button>
-        <button className="btn btn-gray" onClick={onClose}>
-          Cancel
-        </button>
-      </div>
-    </div>
-  );
-}
+const progressFill = {
+  height: "100%",
+  borderRadius: 999,
+  transition: "0.3s"
+};
+
+const addFundsBtn = {
+  background:
+    "linear-gradient(135deg,#2E9E44,#1F7A34)",
+  color: "white",
+  border: "none",
+  borderRadius: 12,
+  padding: "10px 14px",
+  fontWeight: 600,
+  cursor: "pointer"
+};
+
+const emptyCard = {
+  background: "#FFFFFF",
+  padding: 30,
+  borderRadius: 24,
+  textAlign: "center",
+  marginTop: 20,
+  boxShadow:
+    "0 8px 25px rgba(0,0,0,0.06)"
+};
+
+const modalOverlay = {
+  position: "fixed",
+  inset: 0,
+  background:
+    "rgba(0,0,0,0.45)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 999
+};
+
+const modalCard = {
+  width: "95%",
+  maxWidth: 850,
+  maxHeight: "92vh",
+  overflowY: "auto",
+  background: "white",
+  borderRadius: 30,
+  padding: 30,
+  boxShadow:
+    "0 25px 60px rgba(0,0,0,0.25)"
+};
+
+const closeBtn = {
+  border: "none",
+  background: "#EEF4FB",
+  width: 40,
+  height: 40,
+  borderRadius: "50%",
+  cursor: "pointer"
+};
+
+const goalFormGrid = {
+  display: "grid",
+  gridTemplateColumns:
+    window.innerWidth < 768
+      ? "1fr"
+      : "1fr 1fr",
+  gap: 18,
+  marginTop: 24
+};
+
+const input = {
+  width: "100%",
+  marginTop: 8,
+  padding: 14,
+  borderRadius: 14,
+  border: "1px solid #CBD5E1",
+  fontSize: 15
+};
+
+const strategyGrid = {
+  display: "grid",
+  gridTemplateColumns:
+    window.innerWidth < 768
+      ? "1fr"
+      : "1fr 1fr 1fr",
+  gap: 16,
+  marginTop: 18
+};
+
+const strategyCard = {
+  padding: 18,
+  borderRadius: 18,
+  cursor: "pointer",
+  display: "flex",
+  gap: 14,
+  alignItems: "center"
+};
+
+const radioCircle = {
+  width: 18,
+  height: 18,
+  borderRadius: "50%",
+  border: "2px solid #2563EB"
+};
+
+const modalActions = {
+  display: "flex",
+  justifyContent: "flex-end",
+  gap: 14,
+  marginTop: 32
+};
+
+const cancelBtn = {
+  padding: "14px 22px",
+  borderRadius: 14,
+  border: "none",
+  background: "#E2E8F0",
+  cursor: "pointer",
+  fontWeight: 700
+};
+
+const createBtn = {
+  padding: "14px 22px",
+  borderRadius: 14,
+  border: "none",
+  background:
+    "linear-gradient(135deg,#062B68,#0B5ED7)",
+  color: "white",
+  cursor: "pointer",
+  fontWeight: 700
+};

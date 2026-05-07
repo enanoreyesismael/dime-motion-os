@@ -1,5 +1,5 @@
-import { useState } from "react";
 import "./App.css";
+import { NavLink, Outlet } from "react-router-dom";
 
 import {
   LayoutDashboard,
@@ -10,70 +10,60 @@ import {
   Settings as SettingsIcon
 } from "lucide-react";
 
-import Dashboard from "./pages/Dashboard";
-import Income from "./pages/Income";
-import Budget from "./pages/Budget";
-import Transactions from "./pages/Transactions";
-import Goals from "./pages/Goals";
-import Settings from "./pages/Settings";
-
 export default function AppShell() {
-  const [page, setPage] = useState("Dashboard");
-
   const menu = [
     { name: "Dashboard", icon: <LayoutDashboard size={18} /> },
     { name: "Income", icon: <Wallet size={18} /> },
     { name: "Budget", icon: <PieChart size={18} /> },
     { name: "Transactions", icon: <ArrowLeftRight size={18} /> },
     { name: "Goals", icon: <Target size={18} /> },
-    { name: "Settings", icon: <SettingsIcon size={18} /> },
-    
+    { name: "Settings", icon: <SettingsIcon size={18} /> }
   ];
-
-  const renderPage = () => {
-    switch (page) {
-      case "Dashboard": return <Dashboard />;
-      case "Income": return <Income />;
-      case "Budget": return <Budget />;
-      case "Transactions": return <Transactions />;
-      case "Goals": return <Goals />;
-      case "Settings": return <Settings />;
-      default: return <Dashboard />;
-    }
-  };
 
   return (
     <div className="app">
-
       {/* SIDEBAR */}
       <div className="sidebar">
-        <h2>
-            💰 <span style={{ color: "#c2a205" }}>DimeMotion</span>
-        </h2>
-        <p style={{ fontSize: 12, opacity: 0.7 }}>Personal Finance</p>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <img
+            src="/logo-icon.png"
+            alt="logo"
+            style={{ width: 60, height: 60 }}
+          />
+          <span style={{ fontWeight: "bold", fontSize: 25 }}>
+            DimeMotion
+          </span>
+        </div>
+
+        <p style={{ fontSize: 12, opacity: 0.7 }}>
+          Personal Finance
+        </p>
 
         {menu.map(item => (
-          <div
+          <NavLink
             key={item.name}
-            onClick={() => setPage(item.name)}
-            className={`menu-item ${page === item.name ? "active" : ""}`}
+            to={`/${item.name.toLowerCase()}`}
+            className={({ isActive }) =>
+              `menu-item ${isActive ? "active" : ""}`
+            }
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 12
+              gap: 12,
+              textDecoration: "none",
+              color: "inherit"
             }}
           >
             {item.icon}
             {item.name}
-          </div>
+          </NavLink>
         ))}
       </div>
 
-      {/* MAIN */}
+      {/* MAIN CONTENT */}
       <div className="main">
-        {renderPage()}
+        <Outlet />
       </div>
-
     </div>
   );
 }

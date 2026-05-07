@@ -1,12 +1,38 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState
+} from "react";
+
 import { supabase } from "../lib/supabase";
 
-const CurrencyContext = createContext();
+const CurrencyContext =
+  createContext();
 
-export function CurrencyProvider({ children }) {
-  const [currency, setCurrency] = useState("PHP");
-  const [rates, setRates] = useState({ PHP: 1 });
+export function CurrencyProvider({
+  children
+}) {
+  // PRIMARY
+  const [currency, setCurrency] =
+    useState("PHP");
 
+  // SECONDARY
+  const [
+    secondaryCurrency,
+    setSecondaryCurrency
+  ] = useState("USD");
+
+  const [
+    showSecondary,
+    setShowSecondary
+  ] = useState(false);
+
+  // RATES
+  const [rates, setRates] =
+    useState({ USD: 1 });
+
+  // SYMBOLS
   const currencySymbols = {
     PHP: "₱",
     USD: "$",
@@ -29,64 +55,177 @@ export function CurrencyProvider({ children }) {
     IDR: "Rp"
   };
 
-  const symbol = currencySymbols[currency] || "$";
+  // PRIMARY SYMBOL
+  const symbol =
+    currencySymbols[currency] ||
+    "$";
 
-  // 🔥 LOAD USER CURRENCY
+  // SECONDARY SYMBOL
+  const secondarySymbol =
+    currencySymbols[
+      secondaryCurrency
+    ] || "$";
+
+  // SECONDARY RATE
+  const secondaryRate =
+    rates[
+      secondaryCurrency
+    ] || 1;
+
+  // LOAD USER SETTINGS
   useEffect(() => {
-    const loadCurrency = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+    const loadCurrency =
+      async () => {
+        const {
+          data: { user }
+        } =
+          await supabase.auth.getUser();
 
-      const { data } = await supabase
-        .from("user_settings")
-        .select("currency")
-        .eq("user_id", user.id)
-        .maybeSingle();
+        if (!user) return;
 
-      if (data?.currency) setCurrency(data.currency);
-    };
+        const { data } =
+          await supabase
+            .from(
+              "user_settings"
+            )
+            .select(`
+              primary_currency,
+              secondary_currency,
+              show_secondary
+            `)
+            .eq(
+              "user_id",
+              user.id
+            )
+            .maybeSingle();
+
+        // PRIMARY
+        if (
+          data?.primary_currency
+        ) {
+          setCurrency(
+            data.primary_currency
+          );
+        }
+
+        // SECONDARY
+        if (
+          data?.secondary_currency
+        ) {
+          setSecondaryCurrency(
+            data.secondary_currency
+          );
+        }
+
+        // TOGGLE
+        setShowSecondary(
+          data?.show_secondary ||
+            false
+        );
+      };
 
     loadCurrency();
   }, []);
 
-  // 🔥 FETCH EXCHANGE RATES (LIVE)
+  // FETCH RATES
   useEffect(() => {
-    const fetchRates = async () => {
-      try {
-        const res = await fetch("https://open.er-api.com/v6/latest/PHP");
-        const data = await res.json();
+    const fetchRates =
+      async () => {
+        try {
+          const res =
+            await fetch(
+              "https://open.er-api.com/v6/latest/USD"
+            );
 
-        if (data?.rates) {
-          setRates({
-            PHP: 1,
-            ...data.rates
-          });
+          const data =
+            await res.json();
+
+          if (data?.rates) {
+            setRates({
+              USD: 1,
+              ...data.rates
+            });
+          }
+        } catch (err) {
+          console.error(
+            "Rate fetch error:",
+            err
+          );
         }
-      } catch (err) {
-        console.error("Rate fetch error:", err);
-      }
-    };
+      };
 
     fetchRates();
   }, []);
 
-  // 🔥 CONVERSION FUNCTION (SAFE FIX)
-  const convert = (amount) => {
-    const safeAmount = Number(amount) || 0;
-    const rate = rates[currency] || 1;
+  // USER INPUT → USD
+  const toUSD = (amount) => {
+    const safeAmount =
+      Number(amount) || 0;
+
+    const rate =
+      rates[currency] || 1;
+
+    return safeAmount / rate;
+  };
+
+  // USD → PRIMARY
+  const fromUSD = (
+    amountUSD
+  ) => {
+    const safeAmount =
+      Number(amountUSD) || 0;
+
+    const rate =
+      rates[currency] || 1;
+
     return safeAmount * rate;
   };
 
+  // USD → SECONDARY
+  const convertSecondary = (
+    amountUSD
+  ) => {
+    const safeAmount =
+      Number(amountUSD) || 0;
+
+    return (
+      safeAmount *
+      secondaryRate
+    );
+  };
+
   return (
-    <CurrencyContext.Provider value={{
-      currency,
-      setCurrency,
-      symbol,
-      convert
-    }}>
+    <CurrencyContext.Provider
+      value={{
+        // PRIMARY
+        currency,
+        setCurrency,
+        symbol,
+
+        // SECONDARY
+        secondaryCurrency,
+        setSecondaryCurrency,
+
+        showSecondary,
+        setShowSecondary,
+
+        secondarySymbol,
+
+        // RATES
+        rates,
+
+        // CONVERSIONS
+        toUSD,
+        fromUSD,
+        convertSecondary
+      }}
+    >
       {children}
     </CurrencyContext.Provider>
   );
 }
 
-export const useCurrency = () => useContext(CurrencyContext);
+export const useCurrency =
+  () => useContext(
+    CurrencyContext
+  );
